@@ -62,7 +62,7 @@ const HomePage = () => {
 
 
   const heroImages = [
-    "https://static.toiimg.com/photo/msid-85488646,width-96,height-65.cms",
+    "https://assets.architecturaldigest.in/photos/6008215f8f87dc05d00e2362/16:9/w_2560%2Cc_limit/6211-1366x768.jpg",
     "https://www.trawell.in/admin/images/upload/151648398Jaipur_Jantar_Mantar_Main.jpg",
     "https://upload.wikimedia.org/wikipedia/commons/8/8c/Indian_Museum%2C_Courtyard%2C_Kolkata%2C_India.jpg",
     "https://media.istockphoto.com/id/466240080/photo/victoria-memorial-landmark-in-calcutta-india.jpg?s=612x612&w=0&k=20&c=908J0rxwTyUBivotass3lCizKrsE5gGYQ5UpHP3V6zY=",
@@ -268,20 +268,20 @@ const HomePage = () => {
             className="w-full h-full object-cover transition-all duration-1000"
           />
           <div className="absolute inset-0 z-20 flex items-center justify-center">
-            <div className="text-center text-white px-4 max-w-6xl">
-              <h1 className="text-5xl md:text-8xl font-bold mb-8 bg-gradient-to-r from-amber-200 via-orange-200 to-red-200 bg-clip-text text-transparent leading-tight">
+            <div className="text-center text-white px-4 max-w-6xl mt-60">
+              {/* <h1 className="text-3xl md:text-7xl font-bold mb-8 opacity-45  ">
                 BOOK YOUR MUSEUM EXPERIENCE
-              </h1>
-              <p className="text-xl md:text-3xl mb-4 text-amber-100 font-light">Secure Your Journey Through History</p>
+              </h1> */}
+              <p className="text-xl md:text-3xl mb-4 text-amber-100 font-light">From Ancient to Modern - Tickets in Seconds</p>
               <p className="text-lg md:text-xl mb-12 text-gray-200 max-w-4xl mx-auto">Skip the lines, choose your preferred date and time, and enjoy instant confirmation for the world's finest museum experience</p>
               <div className="flex flex-col sm:flex-row gap-6 justify-center">
-                <button
+                <a href="/Explore"
                   onClick={() => setTicketModal(true)}
                   className="bg-gradient-to-r from-amber-600 to-orange-600 hover:from-amber-700 hover:to-orange-700 text-white px-12 py-5 rounded-full text-xl font-semibold shadow-2xl transform hover:scale-105 transition-all duration-300"
                 >
                   <Ticket className="w-6 h-6 inline mr-3" />
                   Book Tickets Online
-                </button>
+                </a>
                 <button className="bg-white/20 backdrop-blur-md hover:bg-white/30 text-white px-12 py-5 rounded-full text-xl font-semibold border-2 border-white/40 transition-all duration-300">
                   <Calendar className="w-6 h-6 inline mr-3" />
                   Check Availability
@@ -305,7 +305,7 @@ const HomePage = () => {
 
       {/* Booking Features */}
       <div className="relative -mt-32 z-30 mb-20">
-        <div className="max-w-7xl mx-auto px-6 mt-30">
+        <div className="max-w-7xl mx-auto px-6 mt-25">
           <div className="bg-white/95 backdrop-blur-xl rounded-3xl p-8 shadow-2xl border border-amber-200">
             <div className="grid grid-cols-2 md:grid-cols-4 gap-8">
               {bookingFeatures.map((feature, idx) => (

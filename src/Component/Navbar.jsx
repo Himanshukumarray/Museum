@@ -21,7 +21,7 @@ const Navbar = () => {
             </div>
 
             <div className="hidden md:flex items-center space-x-8">
-              <a href="/HomePage" className="text-gray-700 hover:text-amber-600 font-medium transition-colors">Home</a>
+              <a href="/" className="text-gray-700 hover:text-amber-600 font-medium transition-colors">Home</a>
               <a href="#exhibitions" className="text-gray-700 hover:text-amber-600 font-medium transition-colors">Exhibitions</a>
               <a href="#tickets" className="text-gray-700 hover:text-amber-600 font-medium transition-colors">Book Tickets</a>
               <a href="/Explore" className="text-gray-700 hover:text-amber-600 font-medium transition-colors">Plan Visit</a>
