@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { MapPin, Clock, Calendar, Users, Play, X, ExternalLink } from 'lucide-react';
-import { useNavigate } from 'react-router-dom'; // For navigation to sign-in page
+import { useNavigate } from 'react-router-dom';
 import reactsvg from './assets/react.svg'; // Placeholder image, replace with actual image path
 
 const MuseumBooking = () => {
@@ -22,15 +22,25 @@ const MuseumBooking = () => {
         showChildren: 0,
         bookingDate: '',
     });
+    const [paymentStatus, setPaymentStatus] = useState(null);
+    const [ticketId, setTicketId] = useState(null);
     const navigate = useNavigate();
 
     useEffect(() => {
+        // Load Razorpay checkout.js
+        const script = document.createElement('script');
+        script.src = 'https://checkout.razorpay.com/v1/checkout.js';
+        script.async = true;
+        document.body.appendChild(script);
         fetchMuseums();
-        // Check for userId in localStorage
-        const userId = localStorage.getItem('userId');
-        if (userId) {
-            setBookingForm((prev) => ({ ...prev, userId }));
+        const museumUser = localStorage.getItem('museumUser');
+        if (museumUser) {
+            const museumData = JSON.parse(museumUser);
+            setBookingForm((prev) => ({ ...prev, userId: museumData.id }));
         }
+        return () => {
+            document.body.removeChild(script);
+        };
     }, []);
 
     const fetchMuseums = async () => {
@@ -61,11 +71,13 @@ const MuseumBooking = () => {
     };
 
     const openBookingModal = (museum) => {
-        const userId = localStorage.getItem('userId');
-        if (!userId) {
-            navigate('/signin'); // Redirect to sign-in page if not logged in
+        const museumUser = localStorage.getItem('museumUser');
+        if (!museumUser) {
+            navigate('/login');
             return;
         }
+        const museumData = JSON.parse(museumUser);
+        const userId = museumData.id;
         setSelectedMuseum(museum);
         setBookingForm((prev) => ({
             ...prev,
@@ -78,8 +90,10 @@ const MuseumBooking = () => {
     const closeBookingModal = () => {
         setShowBookingModal(false);
         setSelectedMuseum(null);
+        setPaymentStatus(null);
+        setTicketId(null);
         setBookingForm({
-            userId: localStorage.getItem('userId') || '',
+            userId: JSON.parse(localStorage.getItem('museumUser'))?.id || '',
             siteId: '',
             bookSiteVisit: false,
             numberOfAdults: 0,
@@ -100,25 +114,94 @@ const MuseumBooking = () => {
         }));
     };
 
+    const calculateTotalFare = () => {
+        const adultSiteFare = selectedMuseum?.adultFare || 0;
+        const childSiteFare = selectedMuseum?.childFare || 0;
+        const adultShowFare = selectedMuseum?.adultShowFare || adultSiteFare;
+        const childShowFare = selectedMuseum?.childShowFare || childSiteFare;
+        let total = 0;
+        if (bookingForm.bookSiteVisit) {
+            total += bookingForm.numberOfAdults * adultSiteFare + bookingForm.numberOfChildren * childSiteFare;
+        }
+        if (bookingForm.bookShow) {
+            total += bookingForm.showAdults * adultShowFare + bookingForm.showChildren * childShowFare;
+        }
+        return total;
+    };
+
+    const isFormValid = () => {
+        if (!bookingForm.bookingDate || (!bookingForm.bookSiteVisit && !bookingForm.bookShow)) {
+            return false;
+        }
+        if (bookingForm.bookSiteVisit && (bookingForm.numberOfAdults <= 0 && bookingForm.numberOfChildren <= 0)) {
+            return false;
+        }
+        if (bookingForm.bookShow && (!bookingForm.showSlotTime || (bookingForm.showAdults <= 0 && bookingForm.showChildren <= 0))) {
+            return false;
+        }
+        return true;
+    };
+
     const handleBookingSubmit = async (e) => {
         e.preventDefault();
+        if (!isFormValid()) {
+            alert('Please fill out all required fields correctly.');
+            return;
+        }
         try {
-            const response = await fetch('https://zfx79p4m-8080.inc1.devtunnels.ms/api/bookings', {
+            setPaymentStatus('pending');
+            // Create Razorpay order
+            const orderRes = await fetch('https://zfx79p4m-8080.inc1.devtunnels.ms/api/payment/create-order', {
                 method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
+                headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(bookingForm),
             });
-            if (!response.ok) {
-                throw new Error('Failed to create booking');
+            if (!orderRes.ok) {
+                throw new Error('Failed to create Razorpay order');
             }
-            const data = await response.json();
-            alert('Booking successful!');
-            closeBookingModal();
+            const orderData = await orderRes.json();
+            const options = {
+                key: 'rzp_test_MmpZH7mBjnByxI', // Replace with production key in live
+                amount: orderData.amount,
+                currency: 'INR',
+                name: 'Smart Museum',
+                description: 'Museum Ticket Booking',
+                order_id: orderData.id,
+                handler: async function (response) {
+                    try {
+                        const confirmPayload = {
+                            razorpayOrderId: response.razorpay_order_id,
+                            razorpayPaymentId: response.razorpay_payment_id,
+                            razorpaySignature: response.razorpay_signature,
+                            bookingRequest: bookingForm,
+                        };
+                        const confirmRes = await fetch('https://zfx79p4m-8080.inc1.devtunnels.ms/api/tickets/confirm', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify(confirmPayload),
+                        });
+                        if (!confirmRes.ok) {
+                            throw new Error('Failed to confirm ticket');
+                        }
+                        const ticket = await confirmRes.json();
+                        setTicketId(ticket.id);
+                        setPaymentStatus('success');
+                        alert(`🎫 Ticket booked successfully!\nTicket ID: ${ticket.id}`);
+                        closeBookingModal();
+                    } catch (err) {
+                        setPaymentStatus('failed');
+                        alert('❌ Ticket confirmation failed: ' + err.message);
+                    }
+                },
+                theme: {
+                    color: '#3399cc',
+                },
+            };
+            const rzp = new window.Razorpay(options);
+            rzp.open();
         } catch (err) {
-            console.error('Error creating booking:', err);
-            alert('Failed to create booking: ' + err.message);
+            setPaymentStatus('failed');
+            alert('❌ Booking failed: ' + err.message);
         }
     };
 
@@ -138,7 +221,7 @@ const MuseumBooking = () => {
 
     const getImageUrl = (photo) => {
         if (!photo) return 'https://via.placeholder.com/400x300';
-        return photo.startsWith('http') ? photo : `http://localhost:8080/${photo.replace(/^\//, '')}`;
+        return photo.startsWith('http') ? photo : `https://zfx79p4m-8080.inc1.devtunnels.ms/${photo.replace(/^\//, '')}`;
     };
 
     if (loading) {
@@ -194,7 +277,6 @@ const MuseumBooking = () => {
                             key={museum.id}
                             className="bg-white rounded-2xl shadow-lg hover:shadow-xl transition-all duration-300 overflow-hidden group"
                         >
-                            {/* Image */}
                             <div className="relative h-64 overflow-hidden">
                                 <img
                                     src={getImageUrl(museum.photos?.[0])}
@@ -210,8 +292,6 @@ const MuseumBooking = () => {
                                     </div>
                                 </div>
                             </div>
-
-                            {/* Content */}
                             <div className="p-6">
                                 <h3 className="text-xl font-bold text-gray-900 mb-2 line-clamp-2">
                                     {museum.name}
@@ -219,8 +299,6 @@ const MuseumBooking = () => {
                                 <p className="text-gray-600 text-sm mb-4 line-clamp-3">
                                     {museum.description}
                                 </p>
-
-                                {/* Details Grid */}
                                 <div className="space-y-3 mb-6">
                                     <div className="flex items-center justify-between">
                                         <div className="flex items-center space-x-2 text-sm text-gray-500">
@@ -231,12 +309,10 @@ const MuseumBooking = () => {
                                             </span>
                                         </div>
                                     </div>
-
                                     <div className="flex items-center space-x-2 text-sm text-gray-500">
                                         <Calendar className="w-4 h-4" />
                                         <span>{formatDays(museum.openingDays)}</span>
                                     </div>
-
                                     <div className="flex items-center justify-between">
                                         <div className="flex items-center space-x-2 text-sm text-gray-500">
                                             <Users className="w-4 h-4" />
@@ -246,8 +322,6 @@ const MuseumBooking = () => {
                                         </div>
                                     </div>
                                 </div>
-
-                                {/* Action Buttons */}
                                 <div className="flex space-x-3">
                                     <button
                                         onClick={() => openBookingModal(museum)}
@@ -267,7 +341,6 @@ const MuseumBooking = () => {
                         </div>
                     ))}
                 </div>
-
                 {museums.length === 0 && !loading && (
                     <div className="text-center py-12">
                         <div className="text-gray-400 text-6xl mb-4">🏛️</div>
@@ -281,7 +354,6 @@ const MuseumBooking = () => {
             {showModal && selectedMuseum && (
                 <div className="fixed inset-0 backdrop-blur-sm bg-black/50 flex items-center justify-center z-50 p-4">
                     <div className="bg-white rounded-2xl max-w-6xl w-full max-h-[90vh] overflow-hidden">
-                        {/* Modal Header */}
                         <div className="flex items-center justify-between p-6 border-b bg-gradient-to-r from-purple-600 to-blue-600 text-white">
                             <div>
                                 <h2 className="text-2xl font-bold">{selectedMuseum.name}</h2>
@@ -294,11 +366,8 @@ const MuseumBooking = () => {
                                 <X className="w-6 h-6" />
                             </button>
                         </div>
-
-                        {/* Modal Content */}
                         <div className="p-6 max-h-[calc(90vh-120px)] overflow-y-auto">
                             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                                {/* 3D Tour */}
                                 <div>
                                     <h2 className="text-lg font-semibold text-gray-800 mb-3">360° Virtual Tour</h2>
                                     <div className="aspect-video bg-neutral-800 rounded-xl overflow-hidden shadow-md">
@@ -312,8 +381,6 @@ const MuseumBooking = () => {
                                         ></iframe>
                                     </div>
                                 </div>
-
-                                {/* YouTube Video */}
                                 <div className="space-y-4">
                                     <div className="flex items-center space-x-2">
                                         <div className="w-3 h-3 bg-red-500 rounded-full"></div>
@@ -330,8 +397,6 @@ const MuseumBooking = () => {
                                     </div>
                                 </div>
                             </div>
-
-                            {/* Museum Info */}
                             <div className="mt-8 p-6 bg-gray-50 rounded-xl">
                                 <h4 className="text-lg font-semibold text-gray-800 mb-3">About This Museum</h4>
                                 <p className="text-gray-600 mb-4">{selectedMuseum.description}</p>
@@ -355,8 +420,6 @@ const MuseumBooking = () => {
                                     </div>
                                 </div>
                             </div>
-
-                            {/* Action Button */}
                             <div className="mt-6 text-center">
                                 <button
                                     onClick={() => openBookingModal(selectedMuseum)}
@@ -373,9 +436,8 @@ const MuseumBooking = () => {
 
             {/* Booking Modal */}
             {showBookingModal && selectedMuseum && (
-                <div className="fixed inset-0 backdrop-blur-sm bg-black/50 flex items-center justify-center z-50 p-4">
+                <div className="fixed inset-0 backdrop-blur-sm bg-black/50 flex items-center justify-center z-50 p-4 overflow-y-scroll">
                     <div className="bg-white rounded-2xl max-w-lg w-full overflow-hidden">
-                        {/* Modal Header */}
                         <div className="flex items-center justify-between p-6 border-b bg-gradient-to-r from-blue-600 to-purple-600 text-white">
                             <h2 className="text-2xl font-bold">Book Tickets for {selectedMuseum.name}</h2>
                             <button
@@ -385,8 +447,6 @@ const MuseumBooking = () => {
                                 <X className="w-6 h-6" />
                             </button>
                         </div>
-
-                        {/* Booking Form */}
                         <form onSubmit={handleBookingSubmit} className="p-6 space-y-6">
                             <div>
                                 <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -402,8 +462,6 @@ const MuseumBooking = () => {
                                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                                 />
                             </div>
-
-                            {/* Site Visit */}
                             <div>
                                 <label className="flex items-center space-x-2 text-sm font-medium text-gray-700">
                                     <input
@@ -448,8 +506,6 @@ const MuseumBooking = () => {
                                     </div>
                                 )}
                             </div>
-
-                            {/* Show Booking */}
                             <div>
                                 <label className="flex items-center space-x-2 text-sm font-medium text-gray-700">
                                     <input
@@ -459,7 +515,7 @@ const MuseumBooking = () => {
                                         onChange={handleBookingFormChange}
                                         className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
                                     />
-                                    <span>Book Show</span>
+                                    <span>Book Show (Adult: ₹{selectedMuseum.adultShowFare || selectedMuseum.adultFare}, Child: ₹{selectedMuseum.childShowFare || selectedMuseum.childFare})</span>
                                 </label>
                                 {bookingForm.bookShow && (
                                     <div className="mt-4 space-y-4">
@@ -475,7 +531,6 @@ const MuseumBooking = () => {
                                                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                                             >
                                                 <option value="" disabled>Select a time slot</option>
-                                                {/* Assuming museum has showTimes array, adjust as needed */}
                                                 {['10:00', '12:00', '14:00', '16:00'].map((time) => (
                                                     <option key={time} value={time}>
                                                         {formatTime(time)}
@@ -514,8 +569,30 @@ const MuseumBooking = () => {
                                     </div>
                                 )}
                             </div>
-
-                            {/* Submit Button */}
+                            {isFormValid() && (
+                                <div className="border-t pt-6">
+                                    <h3 className="text-lg font-semibold text-gray-800 mb-3">Booking Summary</h3>
+                                    <div className="mb-4">
+                                        <p className="text-gray-600">
+                                            Total Fare: ₹{calculateTotalFare()}
+                                        </p>
+                                        {ticketId && (
+                                            <p className="text-gray-600">
+                                                Ticket ID: {ticketId}
+                                            </p>
+                                        )}
+                                        {paymentStatus === 'pending' && (
+                                            <p className="text-yellow-600">Processing payment...</p>
+                                        )}
+                                        {paymentStatus === 'failed' && (
+                                            <p className="text-red-600">Payment failed. Please try again.</p>
+                                        )}
+                                        {paymentStatus === 'success' && (
+                                            <p className="text-green-600">Payment successful! Ticket confirmed.</p>
+                                        )}
+                                    </div>
+                                </div>
+                            )}
                             <div className="flex justify-end space-x-3">
                                 <button
                                     type="button"
@@ -526,9 +603,10 @@ const MuseumBooking = () => {
                                 </button>
                                 <button
                                     type="submit"
-                                    className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+                                    disabled={paymentStatus === 'pending' || paymentStatus === 'success'}
+                                    className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:bg-gray-400"
                                 >
-                                    Confirm Booking
+                                    Pay Now
                                 </button>
                             </div>
                         </form>
