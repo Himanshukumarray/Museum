@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { MapPin, Clock, Calendar, Users, Play, X, ExternalLink } from 'lucide-react';
+import { useNavigate } from 'react-router-dom'; // For navigation to sign-in page
 import reactsvg from './assets/react.svg'; // Placeholder image, replace with actual image path
 
 const MuseumBooking = () => {
@@ -8,15 +9,34 @@ const MuseumBooking = () => {
     const [error, setError] = useState(null);
     const [selectedMuseum, setSelectedMuseum] = useState(null);
     const [showModal, setShowModal] = useState(false);
+    const [showBookingModal, setShowBookingModal] = useState(false);
+    const [bookingForm, setBookingForm] = useState({
+        userId: '',
+        siteId: '',
+        bookSiteVisit: false,
+        numberOfAdults: 0,
+        numberOfChildren: 0,
+        bookShow: false,
+        showSlotTime: '',
+        showAdults: 0,
+        showChildren: 0,
+        bookingDate: '',
+    });
+    const navigate = useNavigate();
 
     useEffect(() => {
         fetchMuseums();
+        // Check for userId in localStorage
+        const userId = localStorage.getItem('userId');
+        if (userId) {
+            setBookingForm((prev) => ({ ...prev, userId }));
+        }
     }, []);
 
     const fetchMuseums = async () => {
         try {
             setLoading(true);
-            const response = await fetch('http://localhost:8080/api/museums');
+            const response = await fetch('https://zfx79p4m-8080.inc1.devtunnels.ms/api/museums');
             if (!response.ok) {
                 throw new Error('Failed to fetch museums');
             }
@@ -40,11 +60,73 @@ const MuseumBooking = () => {
         setSelectedMuseum(null);
     };
 
+    const openBookingModal = (museum) => {
+        const userId = localStorage.getItem('userId');
+        if (!userId) {
+            navigate('/signin'); // Redirect to sign-in page if not logged in
+            return;
+        }
+        setSelectedMuseum(museum);
+        setBookingForm((prev) => ({
+            ...prev,
+            siteId: museum.id,
+            userId,
+        }));
+        setShowBookingModal(true);
+    };
+
+    const closeBookingModal = () => {
+        setShowBookingModal(false);
+        setSelectedMuseum(null);
+        setBookingForm({
+            userId: localStorage.getItem('userId') || '',
+            siteId: '',
+            bookSiteVisit: false,
+            numberOfAdults: 0,
+            numberOfChildren: 0,
+            bookShow: false,
+            showSlotTime: '',
+            showAdults: 0,
+            showChildren: 0,
+            bookingDate: '',
+        });
+    };
+
+    const handleBookingFormChange = (e) => {
+        const { name, value, type, checked } = e.target;
+        setBookingForm((prev) => ({
+            ...prev,
+            [name]: type === 'checkbox' ? checked : value,
+        }));
+    };
+
+    const handleBookingSubmit = async (e) => {
+        e.preventDefault();
+        try {
+            const response = await fetch('https://zfx79p4m-8080.inc1.devtunnels.ms/api/bookings', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify(bookingForm),
+            });
+            if (!response.ok) {
+                throw new Error('Failed to create booking');
+            }
+            const data = await response.json();
+            alert('Booking successful!');
+            closeBookingModal();
+        } catch (err) {
+            console.error('Error creating booking:', err);
+            alert('Failed to create booking: ' + err.message);
+        }
+    };
+
     const formatTime = (time) => {
         return new Date(`2000-01-01T${time}`).toLocaleTimeString('en-US', {
             hour: 'numeric',
             minute: '2-digit',
-            hour12: true
+            hour12: true,
         });
     };
 
@@ -115,13 +197,11 @@ const MuseumBooking = () => {
                             {/* Image */}
                             <div className="relative h-64 overflow-hidden">
                                 <img
-                                    src={museum.photos[[0]]}
+                                    src={getImageUrl(museum.photos?.[0])}
                                     alt={museum.name}
                                     className="w-full h-full object-cover"
                                     onError={() => console.error("Image failed to load")}
                                 />
-
-                                {console.log(museum.photos)}
                                 <div className="absolute inset-0 bg-gradient-to-t from-black/50 to-transparent"></div>
                                 <div className="absolute bottom-4 left-4 text-white">
                                     <div className="flex items-center space-x-1 text-sm">
@@ -145,7 +225,10 @@ const MuseumBooking = () => {
                                     <div className="flex items-center justify-between">
                                         <div className="flex items-center space-x-2 text-sm text-gray-500">
                                             <Clock className="w-4 h-4" />
-                                            <span>{formatTime(museum.openingTime)} - {formatTime(museum.closingTime)}</span>
+                                            <span>
+                                                {formatTime(museum.openingTime)} -{' '}
+                                                {formatTime(museum.closingTime)}
+                                            </span>
                                         </div>
                                     </div>
 
@@ -157,14 +240,19 @@ const MuseumBooking = () => {
                                     <div className="flex items-center justify-between">
                                         <div className="flex items-center space-x-2 text-sm text-gray-500">
                                             <Users className="w-4 h-4" />
-                                            <span>Adult: ₹{museum.adultFare} | Child: ₹{museum.childFare}</span>
+                                            <span>
+                                                Adult: ₹{museum.adultFare} | Child: ₹{museum.childFare}
+                                            </span>
                                         </div>
                                     </div>
                                 </div>
 
                                 {/* Action Buttons */}
                                 <div className="flex space-x-3">
-                                    <button className="flex-1 bg-blue-600 hover:bg-blue-700 text-white py-3 px-4 rounded-xl font-semibold transition-colors duration-200 flex items-center justify-center space-x-2">
+                                    <button
+                                        onClick={() => openBookingModal(museum)}
+                                        className="flex-1 bg-blue-600 hover:bg-blue-700 text-white py-3 px-4 rounded-xl font-semibold transition-colors duration-200 flex items-center justify-center space-x-2"
+                                    >
                                         <span>Book Ticket</span>
                                     </button>
                                     <button
@@ -191,7 +279,7 @@ const MuseumBooking = () => {
 
             {/* Virtual Tour Modal */}
             {showModal && selectedMuseum && (
-                <div className="fixed inset-0 backdrop-blur-sm bg-opacity-75 flex items-center justify-center z-50 p-4">
+                <div className="fixed inset-0 backdrop-blur-sm bg-black/50 flex items-center justify-center z-50 p-4">
                     <div className="bg-white rounded-2xl max-w-6xl w-full max-h-[90vh] overflow-hidden">
                         {/* Modal Header */}
                         <div className="flex items-center justify-between p-6 border-b bg-gradient-to-r from-purple-600 to-blue-600 text-white">
@@ -225,7 +313,6 @@ const MuseumBooking = () => {
                                     </div>
                                 </div>
 
-
                                 {/* YouTube Video */}
                                 <div className="space-y-4">
                                     <div className="flex items-center space-x-2">
@@ -241,7 +328,6 @@ const MuseumBooking = () => {
                                             title="Video Tour"
                                         ></iframe>
                                     </div>
-
                                 </div>
                             </div>
 
@@ -256,23 +342,196 @@ const MuseumBooking = () => {
                                     </div>
                                     <div className="flex items-center space-x-1">
                                         <Clock className="w-4 h-4" />
-                                        <span>{formatTime(selectedMuseum.openingTime)} - {formatTime(selectedMuseum.closingTime)}</span>
+                                        <span>
+                                            {formatTime(selectedMuseum.openingTime)} -{' '}
+                                            {formatTime(selectedMuseum.closingTime)}
+                                        </span>
                                     </div>
                                     <div className="flex items-center space-x-1">
                                         <Users className="w-4 h-4" />
-                                        <span>₹{selectedMuseum.adultFare} (Adult) | ₹{selectedMuseum.childFare} (Child)</span>
+                                        <span>
+                                            ₹{selectedMuseum.adultFare} (Adult) | ₹{selectedMuseum.childFare} (Child)
+                                        </span>
                                     </div>
                                 </div>
                             </div>
 
                             {/* Action Button */}
                             <div className="mt-6 text-center">
-                                <button className="bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white py-3 px-8 rounded-xl font-semibold transition-all duration-200 flex items-center space-x-2 mx-auto">
+                                <button
+                                    onClick={() => openBookingModal(selectedMuseum)}
+                                    className="bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white py-3 px-8 rounded-xl font-semibold transition-all duration-200 flex items-center space-x-2 mx-auto"
+                                >
                                     <ExternalLink className="w-4 h-4" />
                                     <span>Book Your Visit Now</span>
                                 </button>
                             </div>
                         </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Booking Modal */}
+            {showBookingModal && selectedMuseum && (
+                <div className="fixed inset-0 backdrop-blur-sm bg-black/50 flex items-center justify-center z-50 p-4">
+                    <div className="bg-white rounded-2xl max-w-lg w-full overflow-hidden">
+                        {/* Modal Header */}
+                        <div className="flex items-center justify-between p-6 border-b bg-gradient-to-r from-blue-600 to-purple-600 text-white">
+                            <h2 className="text-2xl font-bold">Book Tickets for {selectedMuseum.name}</h2>
+                            <button
+                                onClick={closeBookingModal}
+                                className="p-2 hover:bg-white/20 rounded-full transition-colors"
+                            >
+                                <X className="w-6 h-6" />
+                            </button>
+                        </div>
+
+                        {/* Booking Form */}
+                        <form onSubmit={handleBookingSubmit} className="p-6 space-y-6">
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-1">
+                                    Booking Date
+                                </label>
+                                <input
+                                    type="date"
+                                    name="bookingDate"
+                                    value={bookingForm.bookingDate}
+                                    onChange={handleBookingFormChange}
+                                    min={new Date().toISOString().split('T')[0]}
+                                    required
+                                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                />
+                            </div>
+
+                            {/* Site Visit */}
+                            <div>
+                                <label className="flex items-center space-x-2 text-sm font-medium text-gray-700">
+                                    <input
+                                        type="checkbox"
+                                        name="bookSiteVisit"
+                                        checked={bookingForm.bookSiteVisit}
+                                        onChange={handleBookingFormChange}
+                                        className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                                    />
+                                    <span>Book Site Visit (Adult: ₹{selectedMuseum.adultFare}, Child: ₹{selectedMuseum.childFare})</span>
+                                </label>
+                                {bookingForm.bookSiteVisit && (
+                                    <div className="mt-4 space-y-4">
+                                        <div>
+                                            <label className="block text-sm font-medium text-gray-700 mb-1">
+                                                Number of Adults
+                                            </label>
+                                            <input
+                                                type="number"
+                                                name="numberOfAdults"
+                                                value={bookingForm.numberOfAdults}
+                                                onChange={handleBookingFormChange}
+                                                min="0"
+                                                required
+                                                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                            />
+                                        </div>
+                                        <div>
+                                            <label className="block text-sm font-medium text-gray-700 mb-1">
+                                                Number of Children
+                                            </label>
+                                            <input
+                                                type="number"
+                                                name="numberOfChildren"
+                                                value={bookingForm.numberOfChildren}
+                                                onChange={handleBookingFormChange}
+                                                min="0"
+                                                required
+                                                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                            />
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
+
+                            {/* Show Booking */}
+                            <div>
+                                <label className="flex items-center space-x-2 text-sm font-medium text-gray-700">
+                                    <input
+                                        type="checkbox"
+                                        name="bookShow"
+                                        checked={bookingForm.bookShow}
+                                        onChange={handleBookingFormChange}
+                                        className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                                    />
+                                    <span>Book Show</span>
+                                </label>
+                                {bookingForm.bookShow && (
+                                    <div className="mt-4 space-y-4">
+                                        <div>
+                                            <label className="block text-sm font-medium text-gray-700 mb-1">
+                                                Show Slot Time
+                                            </label>
+                                            <select
+                                                name="showSlotTime"
+                                                value={bookingForm.showSlotTime}
+                                                onChange={handleBookingFormChange}
+                                                required
+                                                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                            >
+                                                <option value="" disabled>Select a time slot</option>
+                                                {/* Assuming museum has showTimes array, adjust as needed */}
+                                                {['10:00', '12:00', '14:00', '16:00'].map((time) => (
+                                                    <option key={time} value={time}>
+                                                        {formatTime(time)}
+                                                    </option>
+                                                ))}
+                                            </select>
+                                        </div>
+                                        <div>
+                                            <label className="block text-sm font-medium text-gray-700 mb-1">
+                                                Number of Adults (Show)
+                                            </label>
+                                            <input
+                                                type="number"
+                                                name="showAdults"
+                                                value={bookingForm.showAdults}
+                                                onChange={handleBookingFormChange}
+                                                min="0"
+                                                required
+                                                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                            />
+                                        </div>
+                                        <div>
+                                            <label className="block text-sm font-medium text-gray-700 mb-1">
+                                                Number of Children (Show)
+                                            </label>
+                                            <input
+                                                type="number"
+                                                name="showChildren"
+                                                value={bookingForm.showChildren}
+                                                onChange={handleBookingFormChange}
+                                                min="0"
+                                                required
+                                                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                            />
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
+
+                            {/* Submit Button */}
+                            <div className="flex justify-end space-x-3">
+                                <button
+                                    type="button"
+                                    onClick={closeBookingModal}
+                                    className="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition-colors"
+                                >
+                                    Cancel
+                                </button>
+                                <button
+                                    type="submit"
+                                    className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+                                >
+                                    Confirm Booking
+                                </button>
+                            </div>
+                        </form>
                     </div>
                 </div>
             )}
