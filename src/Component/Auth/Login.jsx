@@ -73,7 +73,7 @@ const MuseumAuth = () => {
     
     setIsLoading(true);
     try {
-      const response = await fetch('http://localhost:8080/api/auth/login', {
+      const response = await fetch('https://zfx79p4m-8080.inc1.devtunnels.ms/api/auth/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(loginForm)
@@ -81,8 +81,22 @@ const MuseumAuth = () => {
       
       const data = await response.json();
       if (data.success) {
+        // Save user data to localStorage
+        localStorage.setItem('museumUser', JSON.stringify(data.user));
+        localStorage.setItem('isLoggedIn', 'true');
+        localStorage.setItem('loginTime', new Date().toISOString());
+        
         showMessage(data.message, 'success');
-        // Redirect to dashboard or home page
+        
+        // Clear login form
+        setLoginForm({ email: '', password: '' });
+        
+        // Redirect to dashboard or home page after a short delay
+        setTimeout(() => {
+          // Here you would typically redirect to the main app
+          console.log('User logged in successfully:', data.user);
+          // window.location.href = '/dashboard'; // Example redirect
+        }, 2000);
       } else {
         showMessage(data.message, 'error');
       }
@@ -97,7 +111,7 @@ const MuseumAuth = () => {
     
     setIsLoading(true);
     try {
-      const response = await fetch('http://localhost:8080/api/auth/signup', {
+      const response = await fetch('https://zfx79p4m-8080.inc1.devtunnels.ms/api/auth/signup', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(signupForm)
@@ -123,7 +137,7 @@ const MuseumAuth = () => {
     
     setIsLoading(true);
     try {
-      const response = await fetch('http://localhost:8080/api/auth/verify-otp', {
+      const response = await fetch('https://zfx79p4m-8080.inc1.devtunnels.ms/api/auth/verify-otp', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(otpForm)
@@ -145,7 +159,7 @@ const MuseumAuth = () => {
   const handleResendOtp = async () => {
     setIsLoading(true);
     try {
-      const response = await fetch(`http://localhost:8080/api/auth/resend-otp?email=${otpForm.email}`, {
+      const response = await fetch(`https://zfx79p4m-8080.inc1.devtunnels.ms/api/auth/resend-otp?email=${otpForm.email}`, {
         method: 'POST'
       });
       

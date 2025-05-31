@@ -4,7 +4,11 @@ import { Book, Ticket, Menu, X } from 'lucide-react'
 const Navbar = () => {
   const [isMenuOpen, setIsMenuOpen] = useState(false)
   const [ticketModal, setTicketModal] = useState(false)
-
+  const userMuseum = localStorage.getItem('museumUser');
+  // const museumData = JSON.parse(userMuseum);
+  const handleLogout = () => {
+    localStorage.removeItem('museumUser');
+  }
   return (
     <div>
       <nav className="fixed top-0 w-full bg-white/95 backdrop-blur-lg shadow-lg z-50 border-b border-amber-200">
@@ -26,11 +30,17 @@ const Navbar = () => {
               <a href="#tickets" className="text-gray-700 hover:text-amber-600 font-medium transition-colors">Book Tickets</a>
               <a href="/Explore" className="text-gray-700 hover:text-amber-600 font-medium transition-colors">Plan Visit</a>
               <a href="#contact" className="text-gray-700 hover:text-amber-600 font-medium transition-colors">Contact</a>
-              <a href="/login"
+              {
+                userMuseum && <a href="/my-bookings" className="text-gray-700 hover:text-amber-600 font-medium transition-colors">My Bookings</a>
+              }
+              {
+                !userMuseum ? <a href="/login"
                 className="bg-gradient-to-r from-amber-600 to-orange-600 text-white px-6 py-3 rounded-full font-semibold hover:from-amber-700 hover:to-orange-700 transition-all transform hover:scale-105">
                 <Ticket className="w-5 h-5 inline mr-2" />
                 Sign in
-              </a>
+              </a> : <button className='font-bold cursor-pointer' onClick={handleLogout}>Logout</button>
+              }
+              
             </div>
 
             <button
@@ -51,6 +61,7 @@ const Navbar = () => {
               <a href="#tickets" className="text-gray-700 hover:text-amber-600 font-medium">Book Tickets</a>
               <a href="/Explore" className="text-gray-700 hover:text-amber-600 font-medium">Plan Visit</a>
               <a href="#contact" className="text-gray-700 hover:text-amber-600 font-medium">Contact</a>
+              
               <button
                 onClick={() => setTicketModal(true)}
                 className="bg-gradient-to-r from-amber-600 to-orange-600 text-white px-6 py-3 rounded-full font-semibold w-full"
